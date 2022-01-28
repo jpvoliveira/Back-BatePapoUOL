@@ -15,7 +15,7 @@ app.post("/participants", async (req, res) => {
     };
 
     const userJoin = {
-      name: req.body.name,
+      from: req.body.name,
       to: "Todos",
       text: "entra na sala...",
       type: "status",
@@ -33,6 +33,7 @@ app.post("/participants", async (req, res) => {
     await participantsCollection.insertOne(userData);
 
     const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
+    console.log(userJoin)
     await messagesCollection.insertOne(userJoin);
 
     res.sendStatus(201);
@@ -59,5 +60,49 @@ app.get("/participants", async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+app.get("/messages", async (req, res)=>{
+  try{
+    const mongoClient = new MongoClient(
+      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
+    );
+    await mongoClient.connect();
+
+    const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
+    const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
+    const messages = await messagesCollection.find({}).toArray();
+
+    res.send(messages);
+    mongoClient.close();
+  }catch{
+    res.sendStatus(500)
+  }
+})
+
+app.post("/messages", async(req, res)=>{
+  try{
+    const message = {
+      from: req.headers.user,
+      to: req.body.to,
+      text: req.body.text,
+      type: req.body.type,
+      time: dayjs().format("HH:mm:ss"),
+    };
+
+    const mongoClient = new MongoClient(
+      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
+    );
+    await mongoClient.connect();
+
+    const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
+    const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
+    const sendMessage = await messagesCollection.insertOne(message);
+
+    res.send(sendMessage);
+    mongoClient.close();
+  }catch{
+    res.sendStatus(500)
+  }
+})
 
 app.listen(5000);
