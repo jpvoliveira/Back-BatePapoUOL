@@ -11,16 +11,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const userSchema = joi.object({ name: joi.string().required() });
+
 app.post("/participants", async (req, res) => {
   try {
+    const validation = userSchema.validate(req.body);
+    if (validation.error) {
+      res.sendStatus(422);
+      return;
+    }
+
     const userData = {
       name: req.body.name,
       lastStatus: Date.now(),
     };
-
-    if (userData.name === "") {
-      res.sendStatus(422)
-    }
 
     const userJoin = {
       from: req.body.name,
@@ -35,17 +39,18 @@ app.post("/participants", async (req, res) => {
 
     const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
     const participantsCollection = dbAPIBatePapoUOL.collection("participantes");
-    const participant = await participantsCollection.findOne({"name": userData.name})
+    const participant = await participantsCollection.findOne({
+      name: userData.name,
+    });
 
-    if(participant){
-        res.sendStatus(409)
-        return
+    if (participant) {
+      res.sendStatus(409);
+      return;
     }
 
     await participantsCollection.insertOne(userData);
 
     const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
-    console.log(userJoin);
     await messagesCollection.insertOne(userJoin);
 
     res.sendStatus(201);
