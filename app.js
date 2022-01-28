@@ -33,7 +33,7 @@ app.post("/participants", async (req, res) => {
     await participantsCollection.insertOne(userData);
 
     const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
-    console.log(userJoin)
+    console.log(userJoin);
     await messagesCollection.insertOne(userJoin);
 
     res.sendStatus(201);
@@ -61,8 +61,8 @@ app.get("/participants", async (req, res) => {
   }
 });
 
-app.get("/messages", async (req, res)=>{
-  try{
+app.get("/messages", async (req, res) => {
+  try {
     const mongoClient = new MongoClient(
       "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
     );
@@ -74,13 +74,13 @@ app.get("/messages", async (req, res)=>{
 
     res.send(messages);
     mongoClient.close();
-  }catch{
-    res.sendStatus(500)
+  } catch {
+    res.sendStatus(500);
   }
-})
+});
 
-app.post("/messages", async(req, res)=>{
-  try{
+app.post("/messages", async (req, res) => {
+  try {
     const message = {
       from: req.headers.user,
       to: req.body.to,
@@ -100,9 +100,38 @@ app.post("/messages", async(req, res)=>{
 
     res.send(sendMessage);
     mongoClient.close();
-  }catch{
-    res.sendStatus(500)
+  } catch {
+    res.sendStatus(500);
   }
-})
+});
+
+app.post("/status", async (req, res) => {
+  try {
+    const mongoClient = new MongoClient(
+      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
+    );
+    await mongoClient.connect();
+
+    const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
+    const participantsCollection = dbAPIBatePapoUOL.collection("participantes");
+    const user = await participantsCollection.findOne({
+      name: req.headers.user,
+    });
+    
+    if (!user) {
+      res.sendStatus(404);
+      mongoClient.close();
+      return;
+    }
+    await participantsCollection.updateOne(
+      { lastStatus: user.lastStatus },
+      { $set: { lastStatus: Date.now() } }
+    );
+    res.sendStatus(200);
+    mongoClient.close();
+  } catch {
+    res.sendStatus(500);
+  }
+});
 
 app.listen(5000);
