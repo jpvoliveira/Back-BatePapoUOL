@@ -1,44 +1,63 @@
 import express from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
+import dayjs from "dayjs";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.post("/participants", (req, res) => {
-  const userData = req.body;
-  userData.lastStatus = Date.now()
+app.post("/participants", async (req, res) => {
+  try {
+    const userData = {
+      name: req.body.name,
+      lastStatus: Date.now(),
+    };
 
-  const mongoClient = new MongoClient(
-    "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
-  );
-  const promise = mongoClient.connect();
+    const userJoin = {
+      name: req.body.name,
+      to: "Todos",
+      text: "entra na sala...",
+      type: "status",
+      time: dayjs().format("HH:mm:ss"),
+    };
 
-  promise.then((connectedMongoClient) => {
-    console.log("Conexão com sucesso");
+    const mongoClient = new MongoClient(
+      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
+    );
+    await mongoClient.connect();
 
-    const dbAPIBatePapoUOL = connectedMongoClient.db("APIBatePapoUOL");
+    const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
+
     const participantsCollection = dbAPIBatePapoUOL.collection("participantes");
-    const promiseAddParticipants = participantsCollection.insertOne(userData);
-  
-    promiseAddParticipants.then(()=>{
-      res.send(userData)
-      mongoClient.close()
-    })
+    await participantsCollection.insertOne(userData);
 
-    promiseAddParticipants.catch(err => {
-      res.send(err)
-      mongoClient.close()
-    })
-  
-  });
+    const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
+    await messagesCollection.insertOne(userJoin);
 
-  promise.catch((error) => {
-    console.log("Erro na conexão ", error);
-    res.send(error);
+    res.sendStatus(201);
     mongoClient.close();
-  });
+  } catch {
+    res.sendStatus(500);
+  }
+});
+
+app.get("/participants", async (req, res) => {
+  try {
+    const mongoClient = new MongoClient(
+      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
+    );
+    await mongoClient.connect();
+
+    const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
+    const participantsCollection = dbAPIBatePapoUOL.collection("participantes");
+    const participants = await participantsCollection.find({}).toArray();
+
+    res.send(participants);
+    mongoClient.close();
+  } catch {
+    res.sendStatus(500);
+  }
 });
 
 app.listen(5000);
