@@ -1,7 +1,11 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dayjs from "dayjs";
+import joi from "joi";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -14,6 +18,10 @@ app.post("/participants", async (req, res) => {
       lastStatus: Date.now(),
     };
 
+    if (userData.name === "") {
+      res.sendStatus(422)
+    }
+
     const userJoin = {
       from: req.body.name,
       to: "Todos",
@@ -22,14 +30,18 @@ app.post("/participants", async (req, res) => {
       time: dayjs().format("HH:mm:ss"),
     };
 
-    const mongoClient = new MongoClient(
-      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
-    );
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
     await mongoClient.connect();
 
     const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
-
     const participantsCollection = dbAPIBatePapoUOL.collection("participantes");
+    const participant = await participantsCollection.findOne({"name": userData.name})
+
+    if(participant){
+        res.sendStatus(409)
+        return
+    }
+
     await participantsCollection.insertOne(userData);
 
     const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
@@ -45,9 +57,7 @@ app.post("/participants", async (req, res) => {
 
 app.get("/participants", async (req, res) => {
   try {
-    const mongoClient = new MongoClient(
-      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
-    );
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
     await mongoClient.connect();
 
     const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
@@ -63,9 +73,7 @@ app.get("/participants", async (req, res) => {
 
 app.get("/messages", async (req, res) => {
   try {
-    const mongoClient = new MongoClient(
-      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
-    );
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
     await mongoClient.connect();
 
     const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
@@ -89,9 +97,7 @@ app.post("/messages", async (req, res) => {
       time: dayjs().format("HH:mm:ss"),
     };
 
-    const mongoClient = new MongoClient(
-      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
-    );
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
     await mongoClient.connect();
 
     const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
@@ -107,9 +113,7 @@ app.post("/messages", async (req, res) => {
 
 app.post("/status", async (req, res) => {
   try {
-    const mongoClient = new MongoClient(
-      "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=apibatepapouol"
-    );
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
     await mongoClient.connect();
 
     const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
@@ -117,7 +121,7 @@ app.post("/status", async (req, res) => {
     const user = await participantsCollection.findOne({
       name: req.headers.user,
     });
-    
+
     if (!user) {
       res.sendStatus(404);
       mongoClient.close();
@@ -133,5 +137,33 @@ app.post("/status", async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+//Teste - Inatividade user
+async function kickUser() {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
+  await mongoClient.connect();
+
+  const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
+  const participantsCollection = dbAPIBatePapoUOL.collection("participantes");
+  const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
+
+  const users = await participantsCollection.find().toArray();
+
+  console.log(users);
+  users.forEach((item) => {
+    if (Date.now() - 10000 > item.lastStatus) {
+      participantsCollection.deleteOne({ _id: new ObjectId(item._id) });
+      messagesCollection.insertOne({
+        from: item.name,
+        to: "Todos",
+        text: "sai da sala...",
+        type: "status",
+        time: dayjs().format("HH:mm:ss"),
+      });
+    }
+  });
+}
+
+setInterval(kickUser, 15000);
 
 app.listen(5000);
