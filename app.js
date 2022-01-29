@@ -78,18 +78,42 @@ app.get("/participants", async (req, res) => {
 
 app.get("/messages", async (req, res) => {
   try {
+    let limits = 0;
+    if (req.query.limit) {
+      limits = parseInt(req.query.limit);
+    }
+
     const mongoClient = new MongoClient(process.env.MONGO_URI);
     await mongoClient.connect();
 
     const dbAPIBatePapoUOL = mongoClient.db("APIBatePapoUOL");
     const messagesCollection = dbAPIBatePapoUOL.collection("mensagens");
-    const messages = await messagesCollection.find({}).toArray();
+    const messages = await messagesCollection
+      .find({
+        $or: [
+          { type: "message" },
+          { type: "status" },
+          { to: req.headers.user },
+          { from: req.headers.user },
+        ],
+      })
+      .sort({ _id: -1 })
+      .limit(limits)
+      .toArray();
 
-    res.send(messages);
+    res.send(messages.reverse());
     mongoClient.close();
   } catch {
     res.sendStatus(500);
   }
+});
+
+const messageSchema = joi.object({
+  to: joi.string().required(),
+  text: joi.string().required(),
+  type: joi.string().valid("message", "private_message"),
+  from: joi.string(),
+  time: joi.string(),
 });
 
 app.post("/messages", async (req, res) => {
@@ -101,6 +125,12 @@ app.post("/messages", async (req, res) => {
       type: req.body.type,
       time: dayjs().format("HH:mm:ss"),
     };
+
+    const validation = messageSchema.validate(message);
+    if (validation.error) {
+      res.sendStatus(422);
+      return;
+    }
 
     const mongoClient = new MongoClient(process.env.MONGO_URI);
     await mongoClient.connect();
@@ -143,7 +173,6 @@ app.post("/status", async (req, res) => {
   }
 });
 
-//Teste - Inatividade user
 async function kickUser() {
   const mongoClient = new MongoClient(process.env.MONGO_URI);
   await mongoClient.connect();
@@ -154,7 +183,6 @@ async function kickUser() {
 
   const users = await participantsCollection.find().toArray();
 
-  console.log(users);
   users.forEach((item) => {
     if (Date.now() - 10000 > item.lastStatus) {
       participantsCollection.deleteOne({ _id: new ObjectId(item._id) });
